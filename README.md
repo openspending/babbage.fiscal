@@ -19,6 +19,15 @@ To get started (under development):
 $ pip install babbage_fiscal
 ```
 
+### Testing
+
+To run the tests, make sure you have an ElasticSearch running locally on
+http://localhost:9200 and run:
+
+```
+$ tox
+```
+
 ### Command-line interface
 
 You can use the library using a simple command line interface:

@@ -1,84 +1,50 @@
-from threading import Semaphore, Thread
-import os
+try:
+    import urllib.parse as urlparse
+except ImportError:
+    import urlparse
+import threading
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from flask import url_for
+import requests_mock
+import pytest
 
-from elasticsearch import Elasticsearch, NotFoundError
-from flask import Flask, url_for
-from flask.ext.testing import TestCase as FlaskTestCase
-
-from babbage_fiscal import config
-from babbage_fiscal.api import FDPLoaderBlueprint
-from .test_common import SAMPLE_PACKAGES, LOCAL_ELASTICSEARCH
-
-cv = Semaphore(0)
+from babbage_fiscal.callbacks import STATUS_DONE, STATUS_FAIL
+from .test_common import SAMPLE_PACKAGES
 
 MODEL_NAME, SAMPLE_PACKAGE = SAMPLE_PACKAGES['md']
 
 
-class MyHandler(BaseHTTPRequestHandler):
+@pytest.mark.usefixtures('elasticsearch')
+class TestAPI(object):
+    def test_load_package_success(self, client, wait_for_success):
+        url = url_for('FDPLoader.load', package=SAMPLE_PACKAGE, callback=wait_for_success)
+        res = client.get(url)
+        assert res.status_code == 200
 
-    def do_GET(self):
-        self.send_response(200, 'OK')
-        self.end_headers()
-        try:
-            if 'status=done' in self.path:
-                cv.release()
-            return "OK"
-        except Exception as e:
-            print(e)
-
-
-class MyHTTPServer(Thread):
-
-    def __init__(self, port):
-        super(MyHTTPServer, self).__init__()
-        self.server = HTTPServer(("localhost", port), MyHandler)
-
-    def run(self):
-        self.server.serve_forever()
-
-    def stop(self):
-        self.server.shutdown()
+    def test_load_package_bad_parameters(self, client):
+        url = url_for('FDPLoader.load', packadge=SAMPLE_PACKAGE, callback='http://example.org/callback')
+        res = client.get(url)
+        assert res.status_code == 400
 
 
-class TestAPI(FlaskTestCase):
+@pytest.fixture
+def wait_for_success(client):
+    '''Returns callback URL and waits for it to receive a POST with status=STATUS_DONE.
+    '''
+    url = 'http://example.org/callback'
+    timeout = 2
+    status_done_event = threading.Event()
 
-    def create_app(self):
-        config._set_connection_string('sqlite:///test.db')
-        app = Flask('test')
-        app.register_blueprint(FDPLoaderBlueprint, url_prefix='/loader')
-        app.config['DEBUG'] = True
-        app.config['TESTING'] = True
-        app.config['PRESERVE_CONTEXT_ON_EXCEPTION'] = True
-        return app
+    def _status_code_callback(request, context):
+        '''We use this only as a way to check the "status".'''
+        params = urlparse.parse_qs(request.body)
+        status = params.get('status', [])
+        if STATUS_DONE in status:
+            status_done_event.set()
 
-    def setUp(self):
-        super(TestAPI, self).setUp()
-        self.es = Elasticsearch(hosts=[LOCAL_ELASTICSEARCH])
-        try:
-            self.es.indices.delete(index='packages')
-        except NotFoundError:
-            pass
+    with requests_mock.Mocker() as m:
+        m.post(url, text=_status_code_callback)
+        yield url
 
-    def tearDown(self):
-        if os.path.exists('test.db'):
-            os.unlink('test.db')
-
-    def test_load_package_success(self):
-        th = MyHTTPServer(7878)
-        th.start()
-        res = self.client.get(url_for('FDPLoader.load',package=SAMPLE_PACKAGE, callback='http://localhost:7878/callback'))
-        self.assertEquals(res.status_code, 200, "Bad status code %r" % res.status_code)
-        cv.acquire()
-        th.stop()
-
-    def test_load_package_bad_parameters(self):
-        th = MyHTTPServer(7879)
-        th.start()
-        res = self.client.get(url_for('FDPLoader.load',packadge=SAMPLE_PACKAGE, callback='http://localhost:7879/callback'))
-        self.assertEquals(res.status_code, 400, "Bad status code %r" % res.status_code)
-        th.stop()
-
-
-
+    status_done_event.wait(timeout)
+    assert status_done_event.is_set(), 'Did not receive the "STATUS_DONE" message'

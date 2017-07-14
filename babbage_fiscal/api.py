@@ -11,7 +11,7 @@ FDPLoaderBlueprint = Blueprint('FDPLoader', __name__)
 def load():
     package = request.args.get('package')
     callback = request.args.get('callback')
-    logging.info("Requested load of %s with callback %s\n" % (package, callback))
+    logging.info('Requested load of "%s" with callback "%s"\n' % (package, callback))
     if package is not None and callback is not None:
         load_fdp_task.delay(package, callback, get_connection_string())
         return ""

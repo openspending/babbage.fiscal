@@ -64,9 +64,11 @@ class FDPLoader(object):
             .get('_data_hash')
         logging.info('Loaded resource data hash is %s', current_data_hash)
 
+        new_data_hash = None
         remote_url = resource.remote_data_path
-        response = requests.head(remote_url)
-        new_data_hash = response.headers.get('etag')
+        if remote_url:
+            response = requests.head(remote_url)
+            new_data_hash = response.headers.get('etag')
         logging.info('Loading resource data hash is %s', new_data_hash)
 
         resource.descriptor['_schema_hash'] = new_schema_hash
@@ -125,7 +127,6 @@ class FDPLoader(object):
         """
         Load an FDP to the database, create a babbage model and save it as well
         :param package: URL for the datapackage.json
-        :param engine: DB engine
         :param callback: callback to use to send progress updates
         """
 
@@ -230,7 +231,10 @@ class FDPLoader(object):
                     self.status_update(status=STATUS_DELETING_TABLE)
                     storage.delete(faux_table_name)
                 self.status_update(status=STATUS_CREATING_TABLE)
-                storage.create(faux_table_name, storage_schema, indexes_fields=[indexes])
+                indexes_fields = None
+                if indexes:
+                    indexes_fields = [indexes]
+                storage.create(faux_table_name, storage_schema, indexes_fields=indexes_fields)
 
                 self.status_update(status=STATUS_LOADING_DATA_READY)
                 row_processor = RowProcessor(resource.iter(), self.status_update,

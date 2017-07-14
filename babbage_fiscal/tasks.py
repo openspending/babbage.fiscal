@@ -7,7 +7,7 @@ from celery import Celery
 from .callbacks import STATUS_LOADING_DATA
 from .config import get_engine, _set_connection_string
 from .loader import FDPLoader
-from .callbacks import do_request, STATUS_INITIALIZING, STATUS_FAIL
+from .callbacks import do_request, STATUS_INITIALIZING, STATUS_FAIL, STATUS_DONE
 
 app = Celery('fdp_loader')
 app.config_from_object('babbage_fiscal.celeryconfig')

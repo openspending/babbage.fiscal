@@ -1,4 +1,3 @@
-
 language: python
 python:
     - "2.7"
@@ -6,32 +5,16 @@ python:
     - "3.4"
     - "3.5"
 
-addons:
-    postgresql: "9.4"
-
 services:
     - elasticsearch
 
 env:
-    global:
-        - CELERY_CONFIG='sqla+sqlite:///celerydb.sqlite'
-        - CELERY_BACKEND_CONFIG='db+sqlite:///results.db'
-        - OS_ELASTICSEARCH_ADDRESS=localhost:9200
+    - TOXENV="py${PYTHON_VERSION//./}"
+
 install:
-    - python -m pip install -e .
-    - python -m pip install psycopg2 pytest pytest-cov flask-testing coverage future futures
-    - python -m pip install python-dateutil coveralls unicodecsv
-    - python -m pip install jsontableschema datapackage tabulator
-    - python -m pip install -U git+git://github.com/akariv/jsontableschema-sql-py.git@feature/auto-index
-    - python -m pip install -U git+git://github.com/frictionlessdata/datapackage-py.git
-before_script:
-    - psql -c 'create database os;' -U postgres
-    - python -m pytest --version
-    - sleep 30
+    - pip install tox coveralls
 script:
-    - python -m celery -l INFO -A babbage_fiscal.tasks worker &
-    - python -m coverage run --source babbage_fiscal -m pytest tests/
-    - CELERY_ALWAYS_EAGER=true python -m coverage run --source babbage_fiscal -m pytest tests/
+    - tox
 after_success:
     - coveralls
 notifications:
