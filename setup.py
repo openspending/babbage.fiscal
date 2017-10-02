@@ -32,7 +32,7 @@ setup(
         'awesome-slugify',
         'sqlalchemy',
         'click',
-        'datapackage',
+        'datapackage<1.0',
         'jsontableschema',
         'celery>=4',
         'elasticsearch>=1.0.0,<2.0.0',
